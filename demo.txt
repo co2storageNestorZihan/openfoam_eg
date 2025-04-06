@@ -1,0 +1,19 @@
+The permeability calculation in this script follows these principles:
+Darcy's Law Application: The fundamental equation used is derived from Darcy's Law, which relates flow rate through a porous medium to the applied pressure gradient:
+k = (μ × L × v) / ΔP
+Where:
+k is permeability
+μ is dynamic viscosity
+L is length (dx in the script)
+v is Darcy velocity
+ΔP is pressure drop
+Volume Flux Calculation: The script calculates flux at each cell by:
+Computing cell volumes
+Multiplying each cell's velocity by its volume (q = V × u)
+This accounts for the contribution of each cell to the total flow
+Darcy Velocity Determination:
+Sum of all volume fluxes (∑q) divided by total domain volume (V)
+This gives the effective Darcy velocity which represents the average flow through the porous medium
+Permeability Computation:
+Using the formula: kxx = μ × dx × U_Darcy_x / ΔP
+Where U_Darcy_x is the x-component of Darcy velocity

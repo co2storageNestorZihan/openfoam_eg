@@ -1,0 +1,9 @@
+name: porespy_env
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.11
+  - porespy=2.4.1
+  - scikit-image=0.19.3
+  - pyevtk

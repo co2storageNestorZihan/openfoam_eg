@@ -1,71 +1,68 @@
 #!/bin/bash
 cd ${0%/*} || exit 1 # run from this directory
 
-echo "Cleaning simulation outputs while preserving configuration files..."
+echo "Cleaning simulation outputs while preserving essential configuration files..."
 
-# Remove time step directories (but not 0 directory which contains configuration)
-for d in [0-9]* [0-9]*[0-9]; do
-    # Skip the 0 directory which contains configuration files
-    if [ "$d" != "0" ]; then
-        if [ -d "$d" ]; then
-            echo "Removing time step directory: $d"
-            rm -rf "$d"
+# Files to keep (specify explicit patterns)
+declare -a keep_patterns=(
+    # 0 directory files
+    "0/U"
+    "0/V" 
+    "0/p"
+    # constant directory files
+    "constant/transportProperties"
+    "constant/turbulenceProperties"
+    # geometry files
+    "geometry/*.png"
+    # system files
+    "system/blockMeshDict"
+    "system/controlDict"
+    "system/fvSchemes"
+    "system/fvSolution"
+    "system/meshQualityDict"
+    "system/snappyHexMeshDict"
+    # scripts
+    "clean.sh"
+    "run.sh"
+    # all Python files
+    "*.py"
+    # documentation and configuration files
+    "*.md"
+    "*.yaml"
+    "*.yml"
+    "*.txt"
+)
+
+# Create a temporary directory
+temp_dir=$(mktemp -d)
+echo "Using temporary directory: $temp_dir"
+
+# Copy files to keep to temp directory, preserving directory structure
+for pattern in "${keep_patterns[@]}"; do
+    for file in $pattern; do
+        if [ -f "$file" ]; then
+            mkdir -p "$temp_dir/$(dirname "$file")"
+            echo "Preserving: $file"
+            cp "$file" "$temp_dir/$(dirname "$file")/"
         fi
+    done
+done
+
+# Special handling for 0, constant, system, and geometry directories
+# This ensures we only keep the directories themselves, not their contents
+for dir in "0" "constant" "system" "geometry"; do
+    if [ -d "$dir" ]; then
+        mkdir -p "$temp_dir/$dir"
     fi
 done
 
-# Remove log files
-echo "Removing log files..."
-rm -f log.* 
+# Remove everything except .git directory
+find . -mindepth 1 -not -path "./.git*" -not -path "./clean.sh" -not -path "$temp_dir*" -exec rm -rf {} \;
 
-# Clean VTK directory but keep the structure
-if [ -d "VTK" ]; then
-    echo "Cleaning VTK directory..."
-    rm -f VTK/*.vtk
-    # Keep directory structure
-    for d in VTK/*; do
-        if [ -d "$d" ]; then
-            echo "Keeping directory structure: $d"
-            rm -f "$d"/*
-        fi
-    done
-fi
+# Copy preserved files back
+cp -r "$temp_dir"/* .
 
-# Remove generated figure files
-if [ -d "figures" ]; then
-    echo "Removing generated figures..."
-    rm -rf figures
-fi
-rm -f velocity_maps.png
+# Remove temporary directory
+rm -rf "$temp_dir"
 
-# Clean postProcessing directory if it exists
-if [ -d "postProcessing" ]; then
-    echo "Removing postProcessing directory..."
-    rm -rf postProcessing
-fi
-
-# Clean dynamicCode directory if it exists
-if [ -d "dynamicCode" ]; then
-    echo "Removing dynamicCode directory..."
-    rm -rf dynamicCode
-fi
-
-# Clean processor* directories if they exist
-rm -rf processor*
-
-# Clean OpenFOAM-specific temporary files
-rm -f *.OpenFOAM
-rm -f *.foam
-
-# Clean mesh backup
-rm -rf constant/polyMesh/sets
-rm -rf constant/polyMesh/*Zones*
-rm -rf constant/polyMesh/refinementHistory
-rm -rf constant/extendedFeatureEdgeMesh
-
-# But keep the essential mesh files
-if [ -d "constant/polyMesh" ]; then
-    echo "Preserving essential mesh files in constant/polyMesh..."
-fi
-
-echo "Cleaning completed."
+echo "Cleaning completed. Only essential files for simulation initialization are preserved."

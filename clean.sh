@@ -37,15 +37,31 @@ for file in *; do
 done
 cd ..
 
-# Keep only necessary files in the constant directory
-cd constant 2>/dev/null
-for file in *; do
-    if [[ "$file" != "transportProperties" && "$file" != "turbulenceProperties" ]]; then
-        echo "Removing constant/$file"
-        rm -rf "$file"
+# Handle constant directory - preserve triSurface directory structure
+echo "Handling constant directory..."
+if [ -d "constant" ]; then
+    cd constant 2>/dev/null
+    
+    # Create triSurface directory if it doesn't exist
+    if [ ! -d "triSurface" ]; then
+        echo "Creating constant/triSurface directory"
+        mkdir -p triSurface
+    else
+        # Clean STL files inside triSurface
+        echo "Cleaning STL files in triSurface but keeping directory structure"
+        rm -f triSurface/*.stl
     fi
-done
-cd ..
+    
+    # Handle other files in constant directory
+    for file in *; do
+        if [[ "$file" != "transportProperties" && "$file" != "turbulenceProperties" && "$file" != "triSurface" ]]; then
+            echo "Removing constant/$file"
+            rm -rf "$file"
+        fi
+    done
+    
+    cd ..
+fi
 
 # Clean up processor directories
 rm -rf processor*
@@ -55,9 +71,9 @@ rm -f log.*
 rm -f *log
 rm -f *.log
 
-# Handle STL files - keep only those in geometry directory
-echo "Cleaning STL files except in geometry directory..."
-find . -path "./geometry" -prune -o -name "*.stl" -exec rm -f {} \;
+# Handle STL files - except those in specific directories
+echo "Cleaning STL files except in designated directories..."
+find . -path "./geometry" -prune -o -path "./constant/triSurface" -prune -o -name "*.stl" -exec rm -f {} \;
 
 # Remove ParaView files
 rm -f *.foam

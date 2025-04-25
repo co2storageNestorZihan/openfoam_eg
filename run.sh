@@ -6,7 +6,11 @@
  
  application=`getApplication`
  
- ./clean.sh
+
+# copy stl file to constant/triSurface
+cp porous_model.stl constant/triSurface/
+
+#  ./clean.sh
 runApplication blockMesh
 runApplication snappyHexMesh -overwrite
 runApplication checkMesh -allTopology -allGeometry

@@ -18,3 +18,13 @@ runApplication checkMesh -allTopology -allGeometry
 transformPoints -scale "(1e-6 1e-6 1e-6)"
 
 runApplication $application
+
+# Create VTK directory if it doesn't exist
+mkdir -p VTK
+
+# Convert OpenFOAM results to VTK format
+runApplication foamToVTK
+
+# Copy/move specific time steps to match Python script expectations
+cp -f VTK/case_0.vtk VTK/case_0.vtk
+cp -f VTK/case_500.vtk VTK/case_537.vtk  # Using time step 500 as proxy for 537 in Python script

@@ -94,7 +94,16 @@ if [ -d "geometry" ]; then
     cd ..
 fi
 
+
+# remove VTK folder
+rm -rf VTK
+# remove all figures inside figures folder
+rm -rf figures/*
+
+
 # Preserve all Python, YAML, MD, and TXT files as per instructions
 echo "Preserving Python, YAML, MD, and TXT files..."
 
 echo "Clean completed."
+
+

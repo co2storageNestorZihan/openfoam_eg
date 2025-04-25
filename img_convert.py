@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 import porespy as ps
+from matplotlib import pyplot as plt
 
 impath = 'geometry/'         # image path
 imname = 'porousModel.png'   # file name
@@ -14,6 +15,10 @@ arr = np.asarray(image, dtype=int)
 
 # check the shape of the array
 print(arr.shape)
+# count how many 255 in the array
+print(np.sum(arr == 255))   
+# count how many 0 in the array
+print(np.sum(arr == 0))
 
 # 3. save as vti (VTK's image format)
 # 3.1 make 3D by repeating in new axis=2 dimension (openfoam and porespy want 3D)

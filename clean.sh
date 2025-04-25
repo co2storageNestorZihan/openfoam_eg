@@ -56,6 +56,14 @@ for dir in "0" "constant" "system" "geometry"; do
     fi
 done
 
+# Special handling for triSurface directory - preserve the directory but not porous_model.stl
+if [ -d "constant/triSurface" ]; then
+    mkdir -p "$temp_dir/constant/triSurface"
+    # Copy any other STL files that might be in the directory (except porous_model.stl)
+    find "constant/triSurface" -type f -not -name "porous_model.stl" -exec cp {} "$temp_dir/constant/triSurface/" \;
+    echo "Preserving constant/triSurface directory structure (without porous_model.stl)"
+fi
+
 # Remove everything except .git directory
 find . -mindepth 1 -not -path "./.git*" -not -path "./clean.sh" -not -path "$temp_dir*" -exec rm -rf {} \;
 

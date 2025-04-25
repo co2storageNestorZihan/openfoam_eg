@@ -1,71 +1,84 @@
 #!/bin/bash
-cd ${0%/*} || exit 1 # run from this directory
 
-echo "Cleaning simulation outputs while preserving configuration files..."
+# Clean script for OpenFOAM simulation directory
 
-# Remove time step directories (but not 0 directory which contains configuration)
-for d in [0-9]* [0-9]*[0-9]; do
-    # Skip the 0 directory which contains configuration files
-    if [ "$d" != "0" ]; then
-        if [ -d "$d" ]; then
-            echo "Removing time step directory: $d"
-            rm -rf "$d"
-        fi
-    fi
-done
+echo "Cleaning OpenFOAM simulation files..."
 
-# Remove log files
-echo "Removing log files..."
-rm -f log.* 
-
-# Clean VTK directory but keep the structure
-if [ -d "VTK" ]; then
-    echo "Cleaning VTK directory..."
-    rm -f VTK/*.vtk
-    # Keep directory structure
-    for d in VTK/*; do
-        if [ -d "$d" ]; then
-            echo "Keeping directory structure: $d"
-            rm -f "$d"/*
+# Handle the 0 directory - keep only necessary files
+if [ -d "0" ]; then
+    echo "Cleaning 0 directory..."
+    # Looking at the current structure, we need to preserve p 
+    # Don't delete U if it exists as it was flagged as needed
+    cd 0 2>/dev/null
+    for file in *; do
+        # Keep p and U, remove others like cellLevel, pointLevel, V
+        if [[ "$file" != "p" && "$file" != "U" ]]; then
+            echo "Removing 0/$file"
+            rm -f "$file"
         fi
     done
+    cd ..
 fi
 
-# Remove generated figure files
-if [ -d "figures" ]; then
-    echo "Removing generated figures..."
-    rm -rf figures
-fi
-rm -f velocity_maps.png
+# Remove other time directories
+for dir in $(find . -maxdepth 1 -type d -name "[0-9]*" | grep -v "^./0$"); do
+    echo "Removing time directory: $dir"
+    rm -rf "$dir"
+done
 
-# Clean postProcessing directory if it exists
-if [ -d "postProcessing" ]; then
-    echo "Removing postProcessing directory..."
-    rm -rf postProcessing
-fi
+# Keep only necessary files in the system directory
+cd system 2>/dev/null
+for file in *; do
+    if [[ "$file" != "controlDict" && "$file" != "fvSchemes" && "$file" != "fvSolution" && \
+          "$file" != "snappyHexMeshDict" && "$file" != "blockMeshDict" && "$file" != "meshQualityDict" ]]; then
+        echo "Removing system/$file"
+        rm -f "$file"
+    fi
+done
+cd ..
 
-# Clean dynamicCode directory if it exists
-if [ -d "dynamicCode" ]; then
-    echo "Removing dynamicCode directory..."
-    rm -rf dynamicCode
-fi
+# Keep only necessary files in the constant directory
+cd constant 2>/dev/null
+for file in *; do
+    if [[ "$file" != "transportProperties" && "$file" != "turbulenceProperties" ]]; then
+        echo "Removing constant/$file"
+        rm -rf "$file"
+    fi
+done
+cd ..
 
-# Clean processor* directories if they exist
+# Clean up processor directories
 rm -rf processor*
 
-# Clean OpenFOAM-specific temporary files
-rm -f *.OpenFOAM
+# Remove OpenFOAM log files
+rm -f log.*
+rm -f *log
+rm -f *.log
+
+# Handle STL files - keep only those in geometry directory
+echo "Cleaning STL files except in geometry directory..."
+find . -path "./geometry" -prune -o -name "*.stl" -exec rm -f {} \;
+
+# Remove ParaView files
 rm -f *.foam
+rm -f *.OpenFOAM
 
-# Clean mesh backup
-rm -rf constant/polyMesh/sets
-rm -rf constant/polyMesh/*Zones*
-rm -rf constant/polyMesh/refinementHistory
-rm -rf constant/extendedFeatureEdgeMesh
-
-# But keep the essential mesh files
-if [ -d "constant/polyMesh" ]; then
-    echo "Preserving essential mesh files in constant/polyMesh..."
+# Keep essential files in geometry directory
+if [ -d "geometry" ]; then
+    cd geometry 2>/dev/null
+    for file in *; do
+        if [[ "$file" != "porousModel.png" ]]; then
+            # Keep STL files that might be input geometry
+            if [[ "$file" != *.stl ]]; then
+                echo "Removing geometry/$file"
+                rm -f "$file"
+            fi
+        fi
+    done
+    cd ..
 fi
 
-echo "Cleaning completed."
+# Preserve all Python, YAML, MD, and TXT files as per instructions
+echo "Preserving Python, YAML, MD, and TXT files..."
+
+echo "Clean completed."

@@ -13,6 +13,10 @@ print(f"Array min value: {np.min(arr_3d)}, max value: {np.max(arr_3d)}")
 print(np.sum(arr_3d == 255))
 # count how many 0 in the array
 print(np.sum(arr_3d == 0))
+# randomly find a 255 in array and output its index ijk
+print(np.argwhere(arr_3d == 255))
+# print the index of the first 255 in the array
+print(np.argwhere(arr_3d == 255)[0])
 
 # 2. Save as vti (VTK's image format) using porespy
 # No need to stack since the array is already 3D

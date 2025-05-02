@@ -18,8 +18,8 @@ solvers
 {
     p
     {
-        solver          GAMG;
-        smoother        GaussSeidel;
+        solver          PCG;
+        preconditioner  DIC;
         tolerance       1e-8;
         relTol          0.1;
     }
@@ -46,6 +46,8 @@ SIMPLE
 	p		1e-8;
 	U		1e-9;
     }
+    pRefCell        0;
+    pRefValue       0;
 }
 
 potentialFlow

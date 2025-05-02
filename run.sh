@@ -15,7 +15,7 @@ runApplication blockMesh
 runApplication snappyHexMesh -overwrite
 runApplication checkMesh -allTopology -allGeometry
 
-# transformPoints -scale "(1e-6 1e-6 1e-6)"
+transformPoints -scale "(3.0035e-6 3.0035e-6 3.0035e-6)"
 
 runApplication $application
 

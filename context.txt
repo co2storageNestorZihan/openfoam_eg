@@ -1,0 +1,39 @@
+This repository for calculating absolute permeability
+ in 3D porous media using OpenFOAM simulation.
+
+Reproduction from: https://lruepke.github.io/HTF_lecture/summer2022/lectures/L03/FirstCase.html#making-the-mesh
+
+
+
+
+## OpenFOAM Configuration
+
+### Solver
+
+The simulations use the `simpleFoam` solver from OpenFOAM, which:
+- Solves steady-state, incompressible Navier-Stokes equations
+- Is suitable for laminar flows through porous media
+
+### Boundary Conditions
+
+The simulations are configured with:
+- Fixed pressure boundary conditions at inlet (1 Pa) and outlet (0 Pa)
+- No-slip conditions on solid walls
+- Pressure gradient applied in the x-direction
+
+## Data Pipeline
+
+
+image data is 200 cubic: 200*200*200
+the flow simulation is only required from one direction to anther
+
+
+1. Data Processing: The Python script processes the VTK files
+2. stl conversion: python and paraview produce stl file. extracting
+ solid framework 3D
+3. snappyHexMesh on meshing the stl
+4. simulation begin using simplefoam. time step 0-500 and save results in every 100 time step
+5. the solid is considered no-slip conditions
+
+
+

@@ -18,10 +18,11 @@ solvers
 {
     p
     {
-        solver          PCG;
-        preconditioner  DIC;
+        solver          GAMG;
+        smoother        GaussSeidel;
         tolerance       1e-8;
         relTol          0.1;
+        nCellsInCoarsestLevel 2;
     }
 
 
@@ -38,16 +39,18 @@ solvers
 
 SIMPLE
 {
-    nNonOrthogonalCorrectors 0;
+    nNonOrthogonalCorrectors 1;
     consistent yes;
+
+    // Reference pressure specification
+    pRefCell        0;
+    pRefValue       0;
 
     residualControl
     {
 	p		1e-8;
 	U		1e-9;
     }
-    pRefCell        0;
-    pRefValue       0;
 }
 
 potentialFlow
@@ -59,11 +62,11 @@ relaxationFactors
 {
     fields
     {
-        p               0.3;
+        p               0.1;
     }
     equations
     {
-        U               0.9;
+        U               0.1;
     }
 }
 

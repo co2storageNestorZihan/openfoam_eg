@@ -15,8 +15,7 @@ FoamFile
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-// Convert from micrometers to meters
-convertToMeters 0.000001;
+convertToMeters 1;
 
 lx0 0;
 ly0 0;
@@ -40,7 +39,7 @@ vertices
 
 blocks
 (
-    hex (0 1 2 3 4 5 6 7) (100 100 100) simpleGrading (1 1 1)
+    hex (0 1 2 3 4 5 6 7) (200 200 200) simpleGrading (1 1 1)
 );
 
 edges
@@ -49,30 +48,12 @@ edges
 
 boundary
 (
-    top
-    {
-        type wall;    // or patch/symmetryPlane depending on your simulation
-        faces
-        (
-            (7 6 3 2)
-        );
-    }
-
     inlet
     {
-        type patch;   // Change to patch for flow inlet
+        type patch;
         faces
         (
             (0 4 7 3)
-        );
-    }
-
-    bottom
-    {
-        type wall;    // or patch/symmetryPlane depending on your simulation
-        faces
-        (
-            (1 5 4 0)
         );
     }
 
@@ -85,9 +66,27 @@ boundary
         );
     }
 
+    top
+    {
+        type wall;
+        faces
+        (
+            (7 6 3 2)
+        );
+    }
+
+    bottom
+    {
+        type wall;
+        faces
+        (
+            (1 5 4 0)
+        );
+    }
+
     front
     {
-        type wall;    // Change from empty to wall or other appropriate type
+        type wall;
         faces
         (
             (0 3 2 1)
@@ -96,16 +95,12 @@ boundary
 
     back
     {
-        type wall;    // Change from empty to wall or other appropriate type
+        type wall;
         faces
         (
             (4 5 6 7)
         );
     }
 );
-
-//mergePatchPairs
-//(
-//);
 
 // ************************************************************************* //

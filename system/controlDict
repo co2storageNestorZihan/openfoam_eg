@@ -22,13 +22,13 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         1500;
+endTime         500;
 
 deltaT          1;
 
 writeControl    timeStep;
 
-writeInterval   200;
+writeInterval   100;
 
 purgeWrite      0;
 
@@ -43,40 +43,6 @@ timeFormat      general;
 timePrecision   6;
 
 runTimeModifiable true;
-
-functions
-{
-    // Calculate flow at outlet patch
-    outletFlowRate
-    {
-        type            surfaceFieldValue;
-        functionObjectLibs ("libfieldFunctionObjects.so");
-        enabled         true;
-        writeControl    timeStep;
-        writeInterval   10;
-        log             true;
-        writeFields     false;
-        regionType      patch;
-        name            outlet;
-        operation       sum;
-        fields
-        (
-            phi
-        );
-    }
-    
-    // Write out pressure field at regular intervals
-    writePressure
-    {
-        type            writeObjects;
-        libs            ("libutilityFunctionObjects.so");
-        enabled         true;
-        writeControl    timeStep;
-        writeInterval   50;
-        objects         (p);
-        writeOption     noWrite;
-    }
-}
 
 
 // ************************************************************************* //

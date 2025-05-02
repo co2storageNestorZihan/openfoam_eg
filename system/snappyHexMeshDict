@@ -47,14 +47,14 @@ castellatedMeshControls
     // If local number of cells is >= maxLocalCells on any processor
     // switches from from refinement followed by balancing
     // (current method) to (weighted) balancing before refinement.
-    maxLocalCells 500000;
+    maxLocalCells 100000;
 
     // Overall cell limit (approximately). Refinement will stop immediately
     // upon reaching this number so a refinement level might not complete.
     // Note that this is the number of cells before removing the part which
     // is not 'visible' from the keepPoint. The final number of cells might
     // actually be a lot less.
-    maxGlobalCells 10000000;
+    maxGlobalCells 2000000;
 
     // The surface refinement loop might spend lots of iterations refining just a
     // few cells. This setting will cause refinement to stop if <= minimumRefine
@@ -101,7 +101,7 @@ castellatedMeshControls
         solids
         {
             // Surface-wise min and max refinement level
-            level (1 2);
+            level (0 0);
         }
     }
 
@@ -134,8 +134,8 @@ castellatedMeshControls
     // all cells intersecting the surfaces get put into these patches. The
     // section reachable from the locationInMesh is kept.
     // NOTE: This point should never be on a face, always inside a cell, even
-    // after refinement.
-    locationInMesh (0.0001 0.0001 0.0001);
+    // after refinement. so this should be pores
+    locationInMesh (0.5 79.5 128.5);
 
 
     // Whether any faceZones (as specified in the refinementSurfaces)

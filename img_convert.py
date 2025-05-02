@@ -5,6 +5,7 @@ from paraview.simple import *
 # 1. Load 3D numpy array from .npy file
 npy_path = 'large3d/subvolume.npy'
 arr_3d = np.load(npy_path)
+# convert
 
 # Check the shape of the array
 print(f"Array shape: {arr_3d.shape}")
@@ -13,10 +14,14 @@ print(f"Array min value: {np.min(arr_3d)}, max value: {np.max(arr_3d)}")
 print(np.sum(arr_3d == 255))
 # count how many 0 in the array
 print(np.sum(arr_3d == 0))
-# randomly find a 255 in array and output its index ijk
-print(np.argwhere(arr_3d == 255))
 # print the index of the first 255 in the array
 print(np.argwhere(arr_3d == 255)[0])
+
+# calculate porosity 
+# Convert array for porosity calculation: True/1 for pores (255), False/0 for solid (0)
+porosity_input = arr_3d == 255 
+porosity = ps.metrics.porosity(porosity_input)
+print(f"Porosity: {porosity}")
 
 # 2. Save as vti (VTK's image format) using porespy
 # No need to stack since the array is already 3D
@@ -28,6 +33,7 @@ def write_stl(vti_file, stl_file):
     data            = OpenDataFile('geometry/%s.vti'%vti_file)
     # 2. clip at some intermediate value (we have 0 and 255 as solid and pores)
     # Invert=1 to keep the solid part (value 0) and remove pores (value 255)
+    # keep the parts of the data where less than 127.5
     clip1           = Clip(data, ClipType = 'Scalar', Scalars = ['CELLS', 'im'], Value = 127.5, Invert = 1)
     # 3. make a surface of the remaining solid parts
     extractSurface1 = ExtractSurface(clip1)

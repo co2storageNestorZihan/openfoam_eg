@@ -21,14 +21,27 @@ internalField   uniform 0;
 
 boundaryField
 {
-    top
+    inlet
     {
-        type            zeroGradient;
+        type            fixedValue;
+        value           uniform 1;
     }
     outlet
     {
         type            fixedValue;
         value           uniform 0;
+    }
+    top
+    {
+        type            zeroGradient;
+    }
+    bottom
+    {
+        type            zeroGradient;
+    }
+    front
+    {
+        type            zeroGradient;
     }
     back
     {

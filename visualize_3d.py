@@ -1,326 +1,383 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-#%%
 import vtk
 import numpy as np
 from vtk.util import numpy_support as VN
 import matplotlib.pyplot as plt
 import os
-from mpl_toolkits.mplot3d import Axes3D
+from typing import List, Dict, Optional, Tuple, Any
 
-# Create output directory for 3D figures if it doesn't exist
-if not os.path.exists('figures_3d'):
-    os.makedirs('figures_3d')
+# --- Configuration Constants ---
+# These can be overridden when calling functions if needed
+DEFAULT_VTK_DIR = 'VTK'
+DEFAULT_CT_DATA_FILE = 'large3d/subvolume.npy'
+DEFAULT_VOXEL_RESOLUTION = 3.0035e-6 # meters/voxel (MUST MATCH SIMULATION SCALE)
+# --- End Configuration Constants ---
 
-def process_vtk_3d(vtkFile, time_step, include_solids=True):
-    print(f"\nProcessing 3D data for time step {time_step}...")
-    
-    # load fluid VTK data
+
+def load_ct_data(ct_file_path: str = DEFAULT_CT_DATA_FILE) -> Optional[Tuple[np.ndarray, Tuple[int, int, int]]]:
+    """Loads the 3D CT data from a .npy file."""
+    print(f"Loading CT data from {ct_file_path}...")
+    if not os.path.exists(ct_file_path):
+        print(f"  Error: CT data file not found.")
+        return None
+    try:
+        ct_data = np.load(ct_file_path)
+        print(f"  CT data shape: {ct_data.shape}")
+        return ct_data, ct_data.shape
+    except Exception as e:
+        print(f"  Error loading CT data: {e}")
+        return None
+
+def get_ct_slice(
+    ct_data: np.ndarray,
+    slice_dim: str,
+    slice_frac_or_index: float | int,
+    voxel_resolution: float = DEFAULT_VOXEL_RESOLUTION
+) -> Optional[Dict[str, Any]]:
+    """
+    Extracts a 2D slice from the 3D CT data.
+
+    Args:
+        ct_data: The loaded 3D numpy array (CT data).
+        slice_dim: Dimension to slice ('X', 'Y', or 'Z').
+        slice_frac_or_index: Fractional position (0.0-1.0) or integer index for the slice.
+        voxel_resolution: Physical size of one voxel in meters.
+
+    Returns:
+        A dictionary containing slice information, or None on error.
+        Keys: 'ct_slice_2d', 'slice_coord', 'slice_axis_index', 'xlabel',
+              'ylabel', 'plot_extent', 'slice_dim_name', 'slice_index'
+    """
+    Nx_ct, Ny_ct, Nz_ct = ct_data.shape
+    Lx = Nx_ct * voxel_resolution
+    Ly = Ny_ct * voxel_resolution
+    Lz = Nz_ct * voxel_resolution
+
+    slice_dim = slice_dim.upper()
+    max_indices = {'X': Nx_ct - 1, 'Y': Ny_ct - 1, 'Z': Nz_ct - 1}
+
+    if slice_dim not in max_indices:
+        print(f"Error: Invalid slice_dim '{slice_dim}'. Choose 'X', 'Y', or 'Z'.")
+        return None
+
+    # Determine slice index and coordinate
+    if isinstance(slice_frac_or_index, float):
+        if not (0.0 <= slice_frac_or_index <= 1.0):
+            print("Error: slice_frac must be between 0.0 and 1.0.")
+            return None
+        slice_index = int(max_indices[slice_dim] * slice_frac_or_index)
+    elif isinstance(slice_frac_or_index, int):
+        slice_index = slice_frac_or_index
+    else:
+         print("Error: slice_frac_or_index must be a float (0-1) or an int.")
+         return None
+
+    if not (0 <= slice_index <= max_indices[slice_dim]):
+        print(f"Error: slice_index {slice_index} is out of bounds for dimension {slice_dim} (0-{max_indices[slice_dim]}).")
+        return None
+
+    slice_coord = (slice_index + 0.5) * voxel_resolution
+
+    # Extract slice and define plotting parameters
+    if slice_dim == 'Z':
+        ct_slice_2d = ct_data[:, :, slice_index].T # Transpose for imshow
+        slice_axis_index = 2
+        xlabel, ylabel = 'x [m]', 'y [m]'
+        plot_extent = [0, Lx, 0, Ly]
+    elif slice_dim == 'Y':
+        ct_slice_2d = ct_data[:, slice_index, :].T
+        slice_axis_index = 1
+        xlabel, ylabel = 'x [m]', 'z [m]'
+        plot_extent = [0, Lx, 0, Lz]
+    elif slice_dim == 'X':
+        ct_slice_2d = ct_data[slice_index, :, :].T
+        slice_axis_index = 0
+        xlabel, ylabel = 'y [m]', 'z [m]'
+        plot_extent = [0, Ly, 0, Lz]
+
+    print(f"Selected CT slice: {slice_dim} = {slice_index} (physical coord: {slice_coord:.3e} m)")
+
+    return {
+        'ct_slice_2d': ct_slice_2d,
+        'slice_coord': slice_coord,
+        'slice_axis_index': slice_axis_index,
+        'xlabel': xlabel,
+        'ylabel': ylabel,
+        'plot_extent': plot_extent,
+        'slice_dim_name': slice_dim,
+        'slice_index': slice_index
+    }
+
+
+def load_sim_data(vtk_file_path: str) -> Optional[Dict[str, np.ndarray]]:
+    """
+    Loads simulation data (coordinates, U, p) from a single VTK file.
+
+    Returns: Dictionary with keys 'x', 'y', 'z', 'Umag', 'p', 'Ux', 'Uy', 'Uz',
+             or None on failure.
+    """
+    print(f"Processing {vtk_file_path}...")
+    if not os.path.exists(vtk_file_path):
+        print(f"  Error: VTK file not found.")
+        return None
+
     reader = vtk.vtkUnstructuredGridReader()
-    reader.SetFileName(vtkFile)
+    reader.SetFileName(vtk_file_path)
     reader.ReadAllScalarsOn()
     reader.ReadAllVectorsOn()
     reader.Update()
     data = reader.GetOutput()
-    
-    # Calculate cell volumes
-    cellVolumes = vtk.vtkCellSizeFilter()
-    cellVolumes.SetInputData(data)
-    cellVolumes.SetComputeVolume(True)
-    cellVolumes.Update()
-    volumeData = cellVolumes.GetOutput()
-    Vcells = VN.vtk_to_numpy(volumeData.GetCellData().GetArray("Volume"))
-    
-    # extract velocity arrays
-    U = VN.vtk_to_numpy(data.GetCellData().GetArray('U'))
-    Umag = np.sqrt(U[:,0]**2 + U[:,1]**2 + U[:,2]**2)
-    
-    # extract pressure data
-    p = VN.vtk_to_numpy(data.GetCellData().GetArray('p'))
-    
-    # extract cell centers
-    cell_centers = vtk.vtkCellCenters()
-    cell_centers.SetInputData(data)
-    cell_centers.Update()
-    centers = cell_centers.GetOutput()
-    fluid_points = VN.vtk_to_numpy(centers.GetPoints().GetData())
-    
-    # If requested, load the solid structure data
-    solid_points = None
-    if include_solids:
-        # Extract timestep from the filename
-        solid_file = vtkFile.replace('case_', 'solids_').replace('VTK/', 'VTK/solids/')
-        
-        if os.path.exists(solid_file):
-            print(f"Loading solid structure from: {solid_file}")
-            try:
-                solid_reader = vtk.vtkUnstructuredGridReader()
-                solid_reader.SetFileName(solid_file)
-                solid_reader.Update()
-                solid_data = solid_reader.GetOutput()
-                
-                # Try different approaches to get points
-                if solid_data.GetNumberOfPoints() > 0:
-                    # If the file has points directly
-                    print(f"  Found {solid_data.GetNumberOfPoints()} points in solid structure")
-                    solid_points = VN.vtk_to_numpy(solid_data.GetPoints().GetData())
-                elif solid_data.GetNumberOfCells() > 0:
-                    # If the file has cells, get cell centers
-                    print(f"  Found {solid_data.GetNumberOfCells()} cells in solid structure")
-                    solid_centers = vtk.vtkCellCenters()
-                    solid_centers.SetInputData(solid_data)
-                    solid_centers.Update()
-                    centers_output = solid_centers.GetOutput()
-                    if centers_output and centers_output.GetPoints():
-                        solid_points = VN.vtk_to_numpy(centers_output.GetPoints().GetData())
-                    else:
-                        print("  Warning: Could not extract points from solid cell centers")
-                else:
-                    print("  Warning: Solid structure file contains no points or cells")
-            except Exception as e:
-                print(f"  Error processing solid structure: {e}")
-        else:
-            print(f"Warning: Solid structure file not found: {solid_file}")
-    
-    return {
-        'points': fluid_points,
-        'U': U,
-        'Umag': Umag,
-        'p': p,
-        'Vcells': Vcells,
-        'solid_points': solid_points
-    }
 
-def visualize_3d_velocity_field(data, time_step, plane='xy', z_slice=0, save=True):
-    """Create velocity field visualization for a specific plane from 3D data
-    Args:
-        data: Dictionary containing the simulation data
-        time_step: Time step of the simulation
-        plane: Which plane to visualize ('xy', 'xz', or 'yz')
-        z_slice: Position to slice the data (for xy-plane, this is the z-coordinate)
-        save: Whether to save the plot
+    if data is None or data.GetNumberOfCells() == 0:
+        print(f"  Error: Failed to read data or no cells found.")
+        return None
+
+    # Check for required arrays
+    if data.GetCellData().GetArray('U') is None or data.GetCellData().GetArray('p') is None:
+        print(f"  Error: 'U' or 'p' array not found in cell data.")
+        return None
+
+    # Extract cell centers
+    try:
+        cell_centers_filter = vtk.vtkCellCenters()
+        cell_centers_filter.SetInputData(data)
+        cell_centers_filter.Update()
+        centers_data = cell_centers_filter.GetOutput()
+        points_vtk = centers_data.GetPoints().GetData()
+        coords = VN.vtk_to_numpy(points_vtk)
+        x_coords, y_coords, z_coords = coords[:,0], coords[:,1], coords[:,2]
+
+        # Extract velocity and pressure
+        U = VN.vtk_to_numpy(data.GetCellData().GetArray('U'))
+        p = VN.vtk_to_numpy(data.GetCellData().GetArray('p'))
+        Ux, Uy, Uz = U[:,0], U[:,1], U[:,2]
+        Umag = np.sqrt(Ux**2 + Uy**2 + Uz**2)
+
+        print(f"  Successfully processed {data.GetNumberOfCells()} cells.")
+        return {'x': x_coords, 'y': y_coords, 'z': z_coords,
+                'Umag': Umag, 'p': p, 'Ux': Ux, 'Uy': Uy, 'Uz': Uz}
+    except Exception as e:
+        print(f"  Error extracting data from VTK: {e}")
+        return None
+
+
+def plot_slice_comparison(
+    ct_slice_info: Dict[str, Any],
+    sim_data: Dict[str, np.ndarray],
+    time_step: int,
+    field_to_plot: str,
+    voxel_resolution: float = DEFAULT_VOXEL_RESOLUTION,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    s: int = 2, # Scatter point size
+    cmap: str = 'viridis'
+) -> Optional[plt.Figure]:
     """
-    fig = plt.figure(figsize=(15, 6))
-    
-    # Get points and velocities
-    points = data['points']
-    U = data['U']
-    Umag = data['Umag']
-    solid_points = data.get('solid_points', None)
-    
-    # Select points near the chosen plane
-    if plane == 'xy':
-        mask = np.abs(points[:, 2] - z_slice) < 1e-5
-        x, y = points[mask, 0], points[mask, 1]
-        u, v = U[mask, 0], U[mask, 1]
-        umag = Umag[mask]
-        xlabel, ylabel = 'x [m]', 'y [m]'
-        
-        # Filter solid points if available
-        if solid_points is not None:
-            solid_mask = np.abs(solid_points[:, 2] - z_slice) < 1e-5
-            solid_x, solid_y = solid_points[solid_mask, 0], solid_points[solid_mask, 1]
-        else:
-            solid_x, solid_y = None, None
-            
-    elif plane == 'xz':
-        mask = np.abs(points[:, 1] - z_slice) < 1e-5
-        x, y = points[mask, 0], points[mask, 2]
-        u, v = U[mask, 0], U[mask, 2]
-        umag = Umag[mask]
-        xlabel, ylabel = 'x [m]', 'z [m]'
-        
-        # Filter solid points if available
-        if solid_points is not None:
-            solid_mask = np.abs(solid_points[:, 1] - z_slice) < 1e-5
-            solid_x, solid_y = solid_points[solid_mask, 0], solid_points[solid_mask, 2]
-        else:
-            solid_x, solid_y = None, None
-            
-    else:  # yz plane
-        mask = np.abs(points[:, 0] - z_slice) < 1e-5
-        x, y = points[mask, 1], points[mask, 2]
-        u, v = U[mask, 1], U[mask, 2]
-        umag = Umag[mask]
-        xlabel, ylabel = 'y [m]', 'z [m]'
-        
-        # Filter solid points if available
-        if solid_points is not None:
-            solid_mask = np.abs(solid_points[:, 0] - z_slice) < 1e-5
-            solid_x, solid_y = solid_points[solid_mask, 1], solid_points[solid_mask, 2]
-        else:
-            solid_x, solid_y = None, None
-    
-    # Plot 1: Background scatter showing porous structure
-    plt.subplot(121)
-    scatter = plt.scatter(x, y, c=umag, s=2, cmap='viridis', alpha=0.8)
-    
-    # Add solid points if available
-    if solid_points is not None and solid_x is not None and len(solid_x) > 0:
-        plt.scatter(solid_x, solid_y, c='gray', s=1, alpha=0.6, label='Solid')
-    
-    plt.title(f'Time {time_step} - Velocity Magnitude Distribution\n{plane.upper()} Plane')
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.axis('equal')
-    plt.colorbar(scatter, label='Velocity Magnitude [m/s]')
-    
-    # Plot 2: Vector plot with contour background
-    plt.subplot(122)
-    # Use tricontourf for continuous velocity field visualization
-    from matplotlib.tri import Triangulation
-    triang = Triangulation(x, y)
-    contour = plt.tricontourf(triang, umag, levels=20, cmap='viridis', alpha=0.9)
-    
-    # Add velocity vectors
-    downsample = max(1, len(x) // 1000)
-    plt.quiver(x[::downsample], y[::downsample],
-              u[::downsample], v[::downsample],
-              color='white', scale=15, width=0.002)
-    
-    # Add solid points if available
-    if solid_points is not None and solid_x is not None and len(solid_x) > 0:
-        plt.scatter(solid_x, solid_y, c='gray', s=1, alpha=0.6, label='Solid')
-    
-    plt.title(f'Time {time_step} - Flow Field with Vectors\n{plane.upper()} Plane')
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.axis('equal')
-    plt.colorbar(contour, label='Velocity Magnitude [m/s]')
-    
+    Generates a 1x2 plot comparing a CT slice with simulation data for a specific field.
+
+    Args:
+        ct_slice_info: Dictionary returned by get_ct_slice.
+        sim_data: Dictionary returned by load_sim_data for the specific time_step.
+        time_step: The simulation time step being plotted.
+        field_to_plot: The simulation field to plot ('Umag' or 'p').
+        voxel_resolution: Physical size of one voxel in meters.
+        vmin, vmax: Optional min/max values for the simulation data color scale.
+        s: Size of scatter points for simulation data.
+        cmap: Colormap for simulation data.
+
+    Returns:
+        A matplotlib Figure object, or None if plotting fails.
+    """
+    if field_to_plot not in ['Umag', 'p']:
+        print("Error: field_to_plot must be 'Umag' or 'p'.")
+        return None
+    if field_to_plot not in sim_data:
+         print(f"Error: Field '{field_to_plot}' not found in simulation data.")
+         return None
+
+    slice_coord = ct_slice_info['slice_coord']
+    slice_axis_index = ct_slice_info['slice_axis_index']
+    slice_tolerance = voxel_resolution / 2.0
+    slice_dim_name = ct_slice_info['slice_dim_name']
+    slice_index = ct_slice_info['slice_index']
+
+    # Filter simulation data near the selected slice
+    coords_all = np.stack((sim_data['x'], sim_data['y'], sim_data['z']), axis=-1)
+    slice_mask = np.abs(coords_all[:, slice_axis_index] - slice_coord) < slice_tolerance
+
+    if not np.any(slice_mask):
+        print(f"Warning: No simulation cells found near slice at {slice_dim_name}={slice_coord:.3e} m for time {time_step}.")
+        return None
+
+    # Determine plotting coordinates based on slice dimension
+    if slice_dim_name == 'Z':
+        x_plot = sim_data['x'][slice_mask]
+        y_plot = sim_data['y'][slice_mask]
+    elif slice_dim_name == 'Y':
+        x_plot = sim_data['x'][slice_mask]
+        y_plot = sim_data['z'][slice_mask]
+    elif slice_dim_name == 'X':
+        x_plot = sim_data['y'][slice_mask]
+        y_plot = sim_data['z'][slice_mask]
+
+    sim_field_slice = sim_data[field_to_plot][slice_mask]
+
+    # Create figure
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(12, 5.5))
+    ax_ct, ax_sim = axes[0], axes[1]
+
+    # Plot CT Slice
+    ax_ct.imshow(ct_slice_info['ct_slice_2d'], cmap='gray', origin='lower',
+                 extent=ct_slice_info['plot_extent'])
+    ax_ct.set_title(f'CT Slice ({slice_dim_name}={slice_index})')
+    ax_ct.set_xlabel(ct_slice_info['xlabel'])
+    ax_ct.set_ylabel(ct_slice_info['ylabel'])
+    ax_ct.set_aspect('equal')
+
+    # Plot Simulation Field Slice
+    if field_to_plot == 'Umag' and vmin is None:
+        vmin = 0 # Sensible default for velocity magnitude
+
+    sc = ax_sim.scatter(x_plot, y_plot, c=sim_field_slice, s=s, cmap=cmap, vmin=vmin, vmax=vmax)
+    field_label = 'Velocity Magnitude [m/s]' if field_to_plot == 'Umag' else 'Pressure [Pa]'
+    ax_sim.set_title(f'{field_label.split(" ")[0]} Field (Time = {time_step})')
+    ax_sim.set_xlabel(ct_slice_info['xlabel'])
+    ax_sim.set_ylabel(ct_slice_info['ylabel'])
+    ax_sim.set_xlim(ct_slice_info['plot_extent'][0], ct_slice_info['plot_extent'][1])
+    ax_sim.set_ylim(ct_slice_info['plot_extent'][2], ct_slice_info['plot_extent'][3])
+    ax_sim.set_aspect('equal')
+    fig.colorbar(sc, ax=ax_sim, label=field_label)
+
     plt.tight_layout()
-    if save:
-        plt.savefig(f'figures_3d/velocity_field_{plane}_t{time_step}.png', dpi=300, bbox_inches='tight')
-        plt.close()
+    return fig
+
+
+def plot_velocity_histograms(
+    time_steps: List[int],
+    vtk_dir: str = DEFAULT_VTK_DIR
+) -> Optional[plt.Figure]:
+    """
+    Generates a histogram plot comparing velocity magnitude distributions
+    for multiple time steps.
+
+    Args:
+        time_steps: A list of integer time steps to compare.
+        vtk_dir: The directory containing the VTK files (e.g., 'VTK').
+
+    Returns:
+        A matplotlib Figure object, or None if no data could be plotted.
+    """
+    print("\nGenerating Velocity Histograms...")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    has_hist_data = False
+
+    all_umag_data = [] # Collect all data to determine overall range if needed
+
+    # Load data first
+    sim_data_all_times = {}
+    for t in time_steps:
+        vtk_file = os.path.join(vtk_dir, f'case_{t}.vtk')
+        data = load_sim_data(vtk_file)
+        if data is not None and 'Umag' in data:
+            sim_data_all_times[t] = data['Umag']
+            all_umag_data.append(data['Umag'])
+        else:
+            print(f"Warning: Could not load Umag data for time step {t}. Skipping histogram.")
+
+    if not sim_data_all_times:
+        print("Error: No valid velocity magnitude data found for any specified time step.")
+        plt.close(fig)
+        return None
+
+    # Determine common range or plot individually
+    # For simplicity here, we plot individually scaled histograms
+    for t, umag_data in sim_data_all_times.items():
+        if len(umag_data) > 0:
+             ax.hist(umag_data, bins=50, alpha=0.7, label=f'Time {t}', density=True)
+             has_hist_data = True
+
+    if not has_hist_data:
+         print("Error: Although files were loaded, no valid data points found for histograms.")
+         plt.close(fig)
+         return None
+
+    ax.set_title('Velocity Magnitude Distribution (Full Domain)')
+    ax.set_xlabel('Velocity Magnitude [m/s]')
+    ax.set_ylabel('Density')
+    ax.legend()
+    # Set y-axis to log scale only if data warrants it (avoid errors if all counts are zero)
+    y_lims = ax.get_ylim()
+    if y_lims[1] > y_lims[0] > 0: # Check if range is valid and positive
+         ax.set_yscale('log')
     else:
-        plt.show()
+        print("Note: Could not set y-axis to log scale (likely due to data range).")
 
-def visualize_3d_pressure_field(data, time_step, save=True):
-    """Create 3D pressure field visualization"""
-    fig = plt.figure(figsize=(12, 12))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Create scatter plot colored by pressure
-    scatter = ax.scatter(data['points'][:, 0],
-                        data['points'][:, 1],
-                        data['points'][:, 2],
-                        c=data['p'],
-                        cmap='viridis',
-                        s=10)
-    
-    plt.colorbar(scatter, label='Pressure [Pa]')
-    ax.set_xlabel('X [m]')
-    ax.set_ylabel('Y [m]')
-    ax.set_zlabel('Z [m]')
-    ax.set_title(f'3D Pressure Field - Time {time_step}')
-    
-    if save:
-        plt.savefig(f'figures_3d/pressure_field_3d_t{time_step}.png', dpi=300, bbox_inches='tight')
-        plt.close()
-    else:
-        plt.show()
+    plt.tight_layout()
+    return fig
 
-#%%
-data_0 = process_vtk_3d('VTK/case_0.vtk', 0, include_solids=True)
-data_1000 = process_vtk_3d('VTK/case_1000.vtk', 1000, include_solids=True)
+# --- Example Usage (for testing in a standard Python script) ---
+# In a Jupyter notebook, you would typically call the functions individually.
+if __name__ == "__main__":
 
-#%%
-visualize_3d_velocity_field(data_0, 0, plane='xy', z_slice=0)
+    OUTPUT_DIR_MAIN = 'figures_vis_interactive_test'
+    if not os.path.exists(OUTPUT_DIR_MAIN):
+        os.makedirs(OUTPUT_DIR_MAIN)
 
-# #%%
-# def visualize_3d_streamlines(data, time_step, save=True):
-#     """Create 3D streamlines visualization using VTK"""
-#     # Create a grid for streamline seeding
-#     bounds = [
-#         np.min(data['points'][:, 0]), np.max(data['points'][:, 0]),
-#         np.min(data['points'][:, 1]), np.max(data['points'][:, 1]),
-#         np.min(data['points'][:, 2]), np.max(data['points'][:, 2])
-#     ]
-    
-#     # Create VTK points and vectors
-#     points_vtk = vtk.vtkPoints()
-#     vectors_vtk = vtk.vtkFloatArray()
-#     vectors_vtk.SetNumberOfComponents(3)
-    
-#     for i in range(len(data['points'])):
-#         points_vtk.InsertNextPoint(data['points'][i])
-#         vectors_vtk.InsertNextTuple3(data['U'][i, 0], data['U'][i, 1], data['U'][i, 2])
-    
-#     # Create unstructured grid
-#     grid = vtk.vtkUnstructuredGrid()
-#     grid.SetPoints(points_vtk)
-#     grid.GetPointData().SetVectors(vectors_vtk)
-    
-#     # Create streamlines
-#     streamline = vtk.vtkStreamTracer()
-#     streamline.SetInputData(grid)
-    
-#     # Set seed points
-#     seeds = vtk.vtkPointSource()
-#     seeds.SetNumberOfPoints(100)
-#     seeds.SetCenter((bounds[0] + bounds[1])/2, bounds[2], (bounds[4] + bounds[5])/2)
-#     seeds.SetRadius(min(bounds[1]-bounds[0], bounds[3]-bounds[2], bounds[5]-bounds[4])/4)
-#     seeds.Update()
-    
-#     streamline.SetSourceConnection(seeds.GetOutputPort())
-#     streamline.SetMaximumPropagation(200)
-#     streamline.SetInitialIntegrationStep(0.1)
-#     streamline.SetIntegrationDirectionToBoth()
-#     streamline.Update()
-    
-#     # Create streamline actor
-#     mapper = vtk.vtkPolyDataMapper()
-#     mapper.SetInputConnection(streamline.GetOutputPort())
-    
-#     actor = vtk.vtkActor()
-#     actor.SetMapper(mapper)
-#     actor.GetProperty().SetColor(1, 1, 1)
-    
-#     # Create renderer and window
-#     renderer = vtk.vtkRenderer()
-#     renderer.AddActor(actor)
-#     renderer.SetBackground(0.1, 0.1, 0.1)
-    
-#     window = vtk.vtkRenderWindow()
-#     window.AddRenderer(renderer)
-#     window.SetSize(800, 800)
-    
-#     # Save to image
-#     if save:
-#         w2i = vtk.vtkWindowToImageFilter()
-#         w2i.SetInput(window)
-#         w2i.Update()
-        
-#         writer = vtk.vtkPNGWriter()
-#         writer.SetFileName(f'figures_3d/streamlines_3d_t{time_step}.png')
-#         writer.SetInputConnection(w2i.GetOutputPort())
-#         writer.Write()
-#     else:
-#         window.Render()
+    # 1. Load CT
+    ct_result = load_ct_data()
+    if ct_result is None:
+        exit()
+    ct_data_main, ct_shape_main = ct_result
 
-# #%%
-# def create_3d_visualizations():
-#     # Process both time steps
-#     data_0 = process_vtk_3d('VTK/case_0.vtk', 0)
-#     data_537 = process_vtk_3d('VTK/case_537.vtk', 537)
-    
-#     # Create visualizations for both time steps
-#     for time_step, data in [(0, data_0), (537, data_537)]:
-#         print(f"\nCreating visualizations for time step {time_step}...")
-        
-#         # Velocity field visualization
-#         visualize_3d_velocity_field(data, time_step)
-        
-#         # Pressure field visualization
-#         visualize_3d_pressure_field(data, time_step)
-        
-#         # Streamlines visualization
-#         visualize_3d_streamlines(data, time_step)
-    
-#     print("\nAll 3D visualizations have been saved in the 'figures_3d' directory.")
+    # 2. Define Slice Parameters
+    slice_dimension_main = 'Z'
+    slice_position_main = 0.5 # Middle slice fraction
 
-# if __name__ == "__main__":
-#     create_3d_visualizations()
+    # 3. Get CT Slice Info
+    ct_slice_info_main = get_ct_slice(ct_data_main, slice_dimension_main, slice_position_main)
+    if ct_slice_info_main is None:
+        exit()
 
-# %%
+    # 4. Define Time Steps and Load Sim Data
+    time_steps_main = [0, 500] # Use available time steps
+    sim_data_cache = {}
+    for t in time_steps_main:
+         vtk_file = os.path.join(DEFAULT_VTK_DIR, f'case_{t}.vtk')
+         sim_data_cache[t] = load_sim_data(vtk_file)
+
+    # 5. Plot Velocity Comparison for each time step
+    print("\n--- Generating Example Plots ---")
+    for t in time_steps_main:
+        if sim_data_cache.get(t): # Check if data was loaded successfully
+            print(f"\nPlotting comparison for Time={t}, Field=Umag")
+            fig_vel = plot_slice_comparison(ct_slice_info_main, sim_data_cache[t], t, 'Umag', cmap='viridis')
+            if fig_vel:
+                 fig_vel_path = os.path.join(OUTPUT_DIR_MAIN, f'example_CT_vs_Velocity_T{t}.png')
+                 fig_vel.savefig(fig_vel_path, dpi=150)
+                 plt.close(fig_vel) # Close figure to avoid displaying in script mode
+                 print(f"Saved example plot: {fig_vel_path}")
+
+            print(f"\nPlotting comparison for Time={t}, Field=p")
+            # Determine pressure range for consistency (optional, but good practice)
+            all_p = [sd['p'] for sd in sim_data_cache.values() if sd is not None]
+            p_min_glob = np.min(np.concatenate(all_p)) if all_p else 0
+            p_max_glob = np.max(np.concatenate(all_p)) if all_p else 1
+
+            fig_p = plot_slice_comparison(ct_slice_info_main, sim_data_cache[t], t, 'p', cmap='plasma', vmin=p_min_glob, vmax=p_max_glob)
+            if fig_p:
+                 fig_p_path = os.path.join(OUTPUT_DIR_MAIN, f'example_CT_vs_Pressure_T{t}.png')
+                 fig_p.savefig(fig_p_path, dpi=150)
+                 plt.close(fig_p)
+                 print(f"Saved example plot: {fig_p_path}")
+        else:
+            print(f"\nSkipping plots for Time={t} due to load error.")
+
+
+    # 6. Plot Velocity Histograms
+    fig_hist = plot_velocity_histograms(time_steps_main)
+    if fig_hist:
+        fig_hist_path = os.path.join(OUTPUT_DIR_MAIN, 'example_Velocity_Histograms.png')
+        fig_hist.savefig(fig_hist_path, dpi=150)
+        plt.close(fig_hist)
+        print(f"\nSaved example histogram: {fig_hist_path}")
+
+    print("\nExample usage finished.")

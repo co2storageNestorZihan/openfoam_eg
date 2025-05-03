@@ -1,1 +1,87 @@
+# --- OpenFOAM Simulation/Meshing Outputs ---
+
+# Ignore time step directories (except 0/)
+# Matches directories like 1, 10, 500, 100.5 etc.
+[1-9]*/
+[1-9]*.[0-9]*/
+
+# Ignore the base 0 directory initially
+0/
+# But KEEP the initial condition files within 0/
+!0/p
+!0/U
+# Add other files in 0/ you need to keep below, e.g. !0/nut
+
+# Ignore the generated mesh
+constant/polyMesh/
+
+# Ignore parallel processor directories
+processor*/
+
+# Ignore log files
+log.*
+
+# Ignore VTK output directory
+VTK/
+
+# Ignore common post-processing directories
+postProcessing/
+sets/
+
+# Ignore the empty .foam file (often used to identify case type)
+*.foam
+
+# Ignore specific geometry/figure/VTK file types
+*.stl
+*.png
+*.vti
+*.npy
+
+# Ignore specific figure output directories from scripts
+figures/
+figures_vis/
+figures_vis_notebook/
+figures_vis_interactive_test/ # From example usage
+
+# --- Python specific ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.spec
+
+# --- Conda ---
+# Env file itself should be kept (e.g., environment.yml), but ignore cache
+.conda/
+
+# --- Other ---
+*~
+*.swp
+.DS_Store
+
+# --- KEEP SECTION ---
+# The following are generally kept by default unless a broader rule
+# above ignores them. Add specific !rules here if needed, e.g.:
+# !my_important_output_file.dat
+# !constant/my_custom_dictionary
+
+# Folders explicitly NOT ignored (already covered by not having ignore rules):
+# constant/ (except polyMesh) -> implicitly keeps triSurface, transportProperties, etc.
+# system/
+# large3d/
+
+# File types explicitly NOT ignored (already covered by not having ignore rules):
+# *.py
+# *.txt
+# *.toml
+# *.sh
+# *.yaml
+# *.yml
+# *.ipynb
+# README.md
+
+# Ignore large input data folder
 large3d/

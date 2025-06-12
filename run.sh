@@ -10,6 +10,34 @@
 # copy stl file to constant/triSurface
 cp porous_model.stl constant/triSurface/
 
+# Read locationInMesh coordinates from external file
+# Priority: 1) Command line argument, 2) Environment variable, 3) Default path
+if [ "$1" != "" ]; then
+    LOCATION_FILE="$1/locationInMesh.txt"
+elif [ "$LOCATION_DATA_PATH" != "" ]; then
+    LOCATION_FILE="$LOCATION_DATA_PATH/locationInMesh.txt"
+else
+    LOCATION_FILE="/Volumes/topaz_ssd4tb_macbook/porescale_data_small/bentheimer/idx_0/locationInMesh.txt"
+fi
+
+if [ -f "$LOCATION_FILE" ]; then
+    echo "Reading locationInMesh coordinates from $LOCATION_FILE"
+    
+    # Read the three coordinates from the file
+    X_COORD=$(sed -n '1p' "$LOCATION_FILE")
+    Y_COORD=$(sed -n '2p' "$LOCATION_FILE")
+    Z_COORD=$(sed -n '3p' "$LOCATION_FILE")
+    
+    echo "Using locationInMesh coordinates: ($X_COORD $Y_COORD $Z_COORD)"
+    
+    # Update the snappyHexMeshDict file with new coordinates
+    sed -i.bak "s/locationInMesh.*$/locationInMesh ($X_COORD $Y_COORD $Z_COORD);/" system/snappyHexMeshDict
+    
+    echo "Updated snappyHexMeshDict with new locationInMesh coordinates"
+else
+    echo "Warning: $LOCATION_FILE not found. Using default locationInMesh coordinates."
+fi
+
 #  ./clean.sh
 runApplication blockMesh
 runApplication snappyHexMesh -overwrite
